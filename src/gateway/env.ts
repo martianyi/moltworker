@@ -30,6 +30,11 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (!envVars.OPENAI_API_KEY && env.OPENAI_API_KEY) {
     envVars.OPENAI_API_KEY = env.OPENAI_API_KEY;
   }
+  // Kimi (Moonshot) - OpenAI-compatible API; container uses OPENAI_API_KEY + OPENAI_BASE_URL for Kimi
+  if (env.MOONSHOT_API_KEY) {
+    envVars.MOONSHOT_API_KEY = env.MOONSHOT_API_KEY;
+    envVars.MOONSHOT_BASE_URL = env.MOONSHOT_BASE_URL?.replace(/\/+$/, '') || 'https://api.moonshot.cn/v1';
+  }
 
   // Pass base URL (used by start-moltbot.sh to determine provider)
   if (normalizedBaseUrl) {

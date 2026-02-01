@@ -187,6 +187,8 @@ These are the env vars passed TO the container (internal names):
 | Variable | Config Path | Notes |
 |----------|-------------|-------|
 | `ANTHROPIC_API_KEY` | (env var) | Moltbot reads directly from env |
+| `MOONSHOT_API_KEY` | (env var) | Kimi (Moonshot) — OpenAI-compatible; start-moltbot.sh configures openai provider |
+| `MOONSHOT_BASE_URL` | openai provider baseUrl | Default `https://api.moonshot.cn/v1` |
 | `CLAWDBOT_GATEWAY_TOKEN` | `--token` flag | Mapped from `MOLTBOT_GATEWAY_TOKEN` |
 | `CLAWDBOT_DEV_MODE` | `controlUi.allowInsecureAuth` | Mapped from `DEV_MODE` |
 | `TELEGRAM_BOT_TOKEN` | `channels.telegram.botToken` | |

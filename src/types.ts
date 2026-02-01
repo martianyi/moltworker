@@ -14,6 +14,9 @@ export interface MoltbotEnv {
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_BASE_URL?: string;
   OPENAI_API_KEY?: string;
+  // Kimi (Moonshot) - OpenAI-compatible API at https://api.moonshot.cn/v1
+  MOONSHOT_API_KEY?: string;
+  MOONSHOT_BASE_URL?: string; // default https://api.moonshot.cn/v1
   MOLTBOT_GATEWAY_TOKEN?: string; // Gateway token (mapped to CLAWDBOT_GATEWAY_TOKEN for container)
 
   CLAWDBOT_BIND_MODE?: string;

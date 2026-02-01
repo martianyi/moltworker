@@ -208,14 +208,41 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
     config.channels.slack.enabled = true;
 }
 
-// Base URL override (e.g., for Cloudflare AI Gateway)
+// Base URL override (e.g., for Cloudflare AI Gateway, or Kimi/Moonshot)
 // Usage: Set AI_GATEWAY_BASE_URL or ANTHROPIC_BASE_URL to your endpoint like:
 //   https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic
 //   https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/openai
+// Or set MOONSHOT_API_KEY (and optionally MOONSHOT_BASE_URL) for Kimi K2.5
 const baseUrl = (process.env.AI_GATEWAY_BASE_URL || process.env.ANTHROPIC_BASE_URL || '').replace(/\/+$/, '');
 const isOpenAI = baseUrl.endsWith('/openai');
+const kimiBaseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/+$/, '');
+const hasKimi = !!process.env.MOONSHOT_API_KEY;
 
-if (isOpenAI) {
+if (hasKimi) {
+    // Kimi (Moonshot) - OpenAI-compatible API; see https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart
+    console.log('Configuring Kimi (Moonshot) provider with base URL:', kimiBaseUrl);
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+    config.models.providers.openai = {
+        baseUrl: kimiBaseUrl,
+        api: 'openai-responses',
+        apiKey: process.env.MOONSHOT_API_KEY,
+        models: [
+            { id: 'kimi-k2.5', name: 'Kimi K2.5', contextWindow: 262144 },
+            { id: 'kimi-k2-0905-Preview', name: 'Kimi K2 0905 Preview', contextWindow: 262144 },
+            { id: 'kimi-k2-turbo-preview', name: 'Kimi K2 Turbo', contextWindow: 262144 },
+            { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', contextWindow: 262144 },
+            { id: 'kimi-k2-thinking-turbo', name: 'Kimi K2 Thinking Turbo', contextWindow: 262144 },
+        ]
+    };
+    config.agents.defaults.models = config.agents.defaults.models || {};
+    config.agents.defaults.models['openai/kimi-k2.5'] = { alias: 'Kimi K2.5' };
+    config.agents.defaults.models['openai/kimi-k2-0905-Preview'] = { alias: 'Kimi K2 0905' };
+    config.agents.defaults.models['openai/kimi-k2-turbo-preview'] = { alias: 'Kimi K2 Turbo' };
+    config.agents.defaults.models['openai/kimi-k2-thinking'] = { alias: 'Kimi K2 Thinking' };
+    config.agents.defaults.models['openai/kimi-k2-thinking-turbo'] = { alias: 'Kimi K2 Thinking Turbo' };
+    config.agents.defaults.model.primary = 'openai/kimi-k2.5';
+} else if (isOpenAI) {
     // Create custom openai provider config with baseUrl override
     // Omit apiKey so moltbot falls back to OPENAI_API_KEY env var
     console.log('Configuring OpenAI provider with base URL:', baseUrl);

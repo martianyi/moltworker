@@ -67,15 +67,17 @@ function validateRequiredEnv(env: MoltbotEnv): string[] {
     missing.push('CF_ACCESS_AUD');
   }
 
-  // Check for AI Gateway or direct Anthropic configuration
-  if (env.AI_GATEWAY_API_KEY) {
-    // AI Gateway requires both API key and base URL
+  // Check for any valid LLM provider: AI Gateway, Anthropic, OpenAI, or Kimi (Moonshot)
+  const hasGateway = !!env.AI_GATEWAY_API_KEY;
+  const hasAnthropic = !!env.ANTHROPIC_API_KEY;
+  const hasOpenAI = !!env.OPENAI_API_KEY;
+  const hasKimi = !!env.MOONSHOT_API_KEY;
+  if (hasGateway) {
     if (!env.AI_GATEWAY_BASE_URL) {
       missing.push('AI_GATEWAY_BASE_URL (required when using AI_GATEWAY_API_KEY)');
     }
-  } else if (!env.ANTHROPIC_API_KEY) {
-    // Direct Anthropic access requires API key
-    missing.push('ANTHROPIC_API_KEY or AI_GATEWAY_API_KEY');
+  } else if (!hasAnthropic && !hasOpenAI && !hasKimi) {
+    missing.push('ANTHROPIC_API_KEY, AI_GATEWAY_API_KEY, OPENAI_API_KEY, or MOONSHOT_API_KEY');
   }
 
   return missing;
@@ -249,8 +251,9 @@ app.all('*', async (c) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     let hint = 'Check worker logs with: wrangler tail';
-    if (!c.env.ANTHROPIC_API_KEY) {
-      hint = 'ANTHROPIC_API_KEY is not set. Run: wrangler secret put ANTHROPIC_API_KEY';
+    const hasAnyKey = c.env.AI_GATEWAY_API_KEY || c.env.ANTHROPIC_API_KEY || c.env.OPENAI_API_KEY || c.env.MOONSHOT_API_KEY;
+    if (!hasAnyKey) {
+      hint = 'Set an LLM API key: wrangler secret put ANTHROPIC_API_KEY (or MOONSHOT_API_KEY, OPENAI_API_KEY, AI_GATEWAY_API_KEY)';
     } else if (errorMessage.includes('heap out of memory') || errorMessage.includes('OOM')) {
       hint = 'Gateway ran out of memory. Try again or check for memory leaks.';
     }

@@ -364,6 +364,8 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic API key (fallback if AI Gateway not configured) |
 | `ANTHROPIC_BASE_URL` | No | Direct Anthropic API base URL (fallback) |
 | `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
+| `MOONSHOT_API_KEY` | No | Kimi (Moonshot) API key — [Kimi K2.5](https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart) (OpenAI-compatible) |
+| `MOONSHOT_BASE_URL` | No | Kimi API base URL (default: `https://api.moonshot.cn/v1`) |
 | `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
 | `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
 | `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |

@@ -1,7 +1,12 @@
 # Copy this to .dev.vars and fill in your values
 # .dev.vars is gitignored and used by wrangler dev
 
+# One of: ANTHROPIC_API_KEY, MOONSHOT_API_KEY (Kimi), OPENAI_API_KEY, or AI_GATEWAY_* 
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional: use Kimi (Moonshot) instead — get key at https://platform.moonshot.cn/console/api-keys
+# MOONSHOT_API_KEY=sk-...
+# MOONSHOT_BASE_URL=https://api.moonshot.cn/v1
 
 # Local development mode - skips Cloudflare Access auth and bypasses device pairing
 # DEV_MODE=true
