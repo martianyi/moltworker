@@ -221,6 +221,7 @@ These are the env vars passed TO the container (worker keeps MOLTBOT_* for reuse
 | `OPENCLAW_DEV_MODE` | `controlUi.allowInsecureAuth` | Mapped from `DEV_MODE` |
 | `OPENCLAW_STATE_DIR` | config dir | Set to `/root/.clawdbot` so existing R2 backup path is reused |
 | `TELEGRAM_BOT_TOKEN` | `channels.telegram.botToken` | |
+| `OPENCLAW_TELEGRAM_ALLOWED_USERS` | `channels.telegram.dmPolicy=allowlist` + `allowFrom` | Comma-separated user IDs; when set, replaces pairing |
 | `DISCORD_BOT_TOKEN` | `channels.discord.token` | |
 | `SLACK_BOT_TOKEN` | `channels.slack.botToken` | |
 | `SLACK_APP_TOKEN` | `channels.slack.appToken` | |

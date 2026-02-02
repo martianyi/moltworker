@@ -228,7 +228,15 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     config.channels.telegram = config.channels.telegram || {};
     config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
     config.channels.telegram.enabled = true;
-    config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+    if (process.env.OPENCLAW_TELEGRAM_ALLOWED_USERS) {
+        config.channels.telegram.dmPolicy = 'allowlist';
+        config.channels.telegram.allowFrom = process.env.OPENCLAW_TELEGRAM_ALLOWED_USERS
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+    } else {
+        config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+    }
 }
 
 // Discord configuration

@@ -253,6 +253,8 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 npm run deploy
 ```
 
+By default Telegram uses **pairing**: users must approve a pairing code on first contact. To use an **allowlist** instead (no pairing), set `OPENCLAW_TELEGRAM_ALLOWED_USERS` in the Cloudflare Dashboard (Worker → Settings → Variables) to a comma-separated list of Telegram user IDs (e.g. `8184225710` or `8184225710,123456789`). Only those users can DM the bot.
+
 ### Discord
 
 ```bash
@@ -379,7 +381,8 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `R2_SECRET_ACCESS_KEY` | No | R2 secret key for persistent storage |
 | `CF_ACCOUNT_ID` | No | Cloudflare account ID (required for R2 storage) |
 | `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
-| `TELEGRAM_DM_POLICY` | No | Telegram DM policy: `pairing` (default) or `open` |
+| `TELEGRAM_DM_POLICY` | No | Telegram DM policy: `pairing` (default) or `open` (ignored when `OPENCLAW_TELEGRAM_ALLOWED_USERS` is set) |
+| `OPENCLAW_TELEGRAM_ALLOWED_USERS` | No | Comma-separated Telegram user IDs for DM allowlist; when set, uses `allowlist` instead of pairing (e.g. `8184225710` or `8184225710,123456789`) |
 | `DISCORD_BOT_TOKEN` | No | Discord bot token |
 | `DISCORD_DM_POLICY` | No | Discord DM policy: `pairing` (default) or `open` |
 | `SLACK_BOT_TOKEN` | No | Slack bot token |

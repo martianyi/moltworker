@@ -24,6 +24,7 @@ MOLTBOT_GATEWAY_TOKEN=dev-token-change-in-prod
 
 # Optional chat channels
 # TELEGRAM_BOT_TOKEN=optional
+# OPENCLAW_TELEGRAM_ALLOWED_USERS=8184225710   # comma-separated user IDs; use allowlist instead of pairing
 # DISCORD_BOT_TOKEN=optional
 
 # CDP (Chrome DevTools Protocol) configuration for browser automation
