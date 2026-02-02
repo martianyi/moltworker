@@ -136,7 +136,10 @@ For local development, create a `.dev.vars` file with:
 ```bash
 DEV_MODE=true               # Skip Cloudflare Access auth + bypass device pairing
 DEBUG_ROUTES=true           # Enable /debug/* routes (optional)
+MOLTBOT_GATEWAY_TOKEN=dev-token-change-in-prod   # Optional; if set, open Control UI with ?token=...
 ```
+
+**If you set `MOLTBOT_GATEWAY_TOKEN`** (e.g. for a fixed dev token), open the Control UI with the token in the URL: `http://localhost:8787/?token=dev-token-change-in-prod`. Otherwise you will see "Pairing required" (WebSocket 1008) because the gateway uses token auth.
 
 ## Authentication
 
@@ -364,8 +367,8 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic API key (fallback if AI Gateway not configured) |
 | `ANTHROPIC_BASE_URL` | No | Direct Anthropic API base URL (fallback) |
 | `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
-| `MOONSHOT_API_KEY` | No | Kimi (Moonshot) API key — [Kimi K2.5](https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart) (OpenAI-compatible) |
-| `MOONSHOT_BASE_URL` | No | Kimi API base URL (default: `https://api.moonshot.cn/v1`) |
+| `MOONSHOT_API_KEY` | No | Kimi (Moonshot) API key — [Moonshot/Kimi K2](https://docs.openclaw.ai/providers/moonshot) (OpenAI-compatible) |
+| `MOONSHOT_BASE_URL` | No | Moonshot API base URL: `https://api.moonshot.cn/v1` (China, default) or `https://api.moonshot.ai/v1` (international) |
 | `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
 | `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
 | `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |

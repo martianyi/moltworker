@@ -3,10 +3,10 @@ import { buildEnvVars } from './env';
 import { createMockEnv } from '../test-utils';
 
 describe('buildEnvVars', () => {
-  it('returns empty object when no env vars set', () => {
+  it('returns only OPENCLAW_STATE_DIR when no env vars set', () => {
     const env = createMockEnv();
     const result = buildEnvVars(env);
-    expect(result).toEqual({});
+    expect(result).toEqual({ OPENCLAW_STATE_DIR: '/root/.clawdbot' });
   });
 
   it('includes ANTHROPIC_API_KEY when set directly', () => {
@@ -101,10 +101,11 @@ describe('buildEnvVars', () => {
     expect(result.MOONSHOT_BASE_URL).toBe('https://custom.moonshot.cn/v1');
   });
 
-  it('maps MOLTBOT_GATEWAY_TOKEN to CLAWDBOT_GATEWAY_TOKEN for container', () => {
+  it('maps MOLTBOT_GATEWAY_TOKEN to OPENCLAW_GATEWAY_TOKEN for container', () => {
     const env = createMockEnv({ MOLTBOT_GATEWAY_TOKEN: 'my-token' });
     const result = buildEnvVars(env);
-    expect(result.CLAWDBOT_GATEWAY_TOKEN).toBe('my-token');
+    expect(result.OPENCLAW_GATEWAY_TOKEN).toBe('my-token');
+    expect(result.OPENCLAW_STATE_DIR).toBe('/root/.clawdbot');
   });
 
   it('includes all channel tokens when set', () => {
@@ -126,14 +127,14 @@ describe('buildEnvVars', () => {
     expect(result.SLACK_APP_TOKEN).toBe('slack-app');
   });
 
-  it('maps DEV_MODE to CLAWDBOT_DEV_MODE for container', () => {
+  it('maps DEV_MODE to OPENCLAW_DEV_MODE for container', () => {
     const env = createMockEnv({
       DEV_MODE: 'true',
       CLAWDBOT_BIND_MODE: 'lan',
     });
     const result = buildEnvVars(env);
     
-    expect(result.CLAWDBOT_DEV_MODE).toBe('true');
+    expect(result.OPENCLAW_DEV_MODE).toBe('true');
     expect(result.CLAWDBOT_BIND_MODE).toBe('lan');
   });
 
@@ -145,11 +146,10 @@ describe('buildEnvVars', () => {
     });
     const result = buildEnvVars(env);
     
-    expect(result).toEqual({
-      ANTHROPIC_API_KEY: 'sk-key',
-      CLAWDBOT_GATEWAY_TOKEN: 'token',
-      TELEGRAM_BOT_TOKEN: 'tg',
-    });
+    expect(result.ANTHROPIC_API_KEY).toBe('sk-key');
+    expect(result.OPENCLAW_GATEWAY_TOKEN).toBe('token');
+    expect(result.OPENCLAW_STATE_DIR).toBe('/root/.clawdbot');
+    expect(result.TELEGRAM_BOT_TOKEN).toBe('tg');
   });
 
   it('handles trailing slash in AI_GATEWAY_BASE_URL for OpenAI', () => {

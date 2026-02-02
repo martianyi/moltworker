@@ -1,8 +1,9 @@
 import type { MoltbotEnv } from '../types';
 
 /**
- * Build environment variables to pass to the Moltbot container process
- * 
+ * Build environment variables to pass to the OpenClaw container process.
+ * Worker keeps MOLTBOT_* names for reuse; container gets OPENCLAW_* and OPENCLAW_STATE_DIR.
+ *
  * @param env - Worker environment bindings
  * @returns Environment variables record
  */
@@ -30,7 +31,7 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (!envVars.OPENAI_API_KEY && env.OPENAI_API_KEY) {
     envVars.OPENAI_API_KEY = env.OPENAI_API_KEY;
   }
-  // Kimi (Moonshot) - OpenAI-compatible API; container uses OPENAI_API_KEY + OPENAI_BASE_URL for Kimi
+  // Kimi (Moonshot) - OpenAI-compatible API; container uses moonshot provider (see docs.openclaw.ai/providers/moonshot)
   if (env.MOONSHOT_API_KEY) {
     envVars.MOONSHOT_API_KEY = env.MOONSHOT_API_KEY;
     envVars.MOONSHOT_BASE_URL = env.MOONSHOT_BASE_URL?.replace(/\/+$/, '') || 'https://api.moonshot.cn/v1';
@@ -48,9 +49,10 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   } else if (env.ANTHROPIC_BASE_URL) {
     envVars.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
   }
-  // Map MOLTBOT_GATEWAY_TOKEN to CLAWDBOT_GATEWAY_TOKEN (container expects this name)
-  if (env.MOLTBOT_GATEWAY_TOKEN) envVars.CLAWDBOT_GATEWAY_TOKEN = env.MOLTBOT_GATEWAY_TOKEN;
-  if (env.DEV_MODE) envVars.CLAWDBOT_DEV_MODE = env.DEV_MODE; // Pass DEV_MODE as CLAWDBOT_DEV_MODE to container
+  // OpenClaw: reuse MOLTBOT_* on worker side; container gets OPENCLAW_* and OPENCLAW_STATE_DIR for /root/.clawdbot
+  if (env.MOLTBOT_GATEWAY_TOKEN) envVars.OPENCLAW_GATEWAY_TOKEN = env.MOLTBOT_GATEWAY_TOKEN;
+  if (env.DEV_MODE) envVars.OPENCLAW_DEV_MODE = env.DEV_MODE;
+  envVars.OPENCLAW_STATE_DIR = '/root/.clawdbot'; // reuse existing config path & R2 backup layout
   if (env.CLAWDBOT_BIND_MODE) envVars.CLAWDBOT_BIND_MODE = env.CLAWDBOT_BIND_MODE;
   if (env.TELEGRAM_BOT_TOKEN) envVars.TELEGRAM_BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
   if (env.TELEGRAM_DM_POLICY) envVars.TELEGRAM_DM_POLICY = env.TELEGRAM_DM_POLICY;

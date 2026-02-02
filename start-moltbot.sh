@@ -1,23 +1,25 @@
 #!/bin/bash
-# Startup script for Moltbot in Cloudflare Sandbox
+# Startup script for OpenClaw in Cloudflare Sandbox (moltbot/clawdbot -> openclaw)
 # This script:
 # 1. Restores config from R2 backup if available
-# 2. Configures moltbot from environment variables
+# 2. Configures openclaw from environment variables
 # 3. Starts a background sync to backup config to R2
 # 4. Starts the gateway
 
 set -e
 
-# Check if clawdbot gateway is already running - bail early if so
-# Note: CLI is still named "clawdbot" until upstream renames it
-if pgrep -f "clawdbot gateway" > /dev/null 2>&1; then
-    echo "Moltbot gateway is already running, exiting."
+# On failure, log where we failed so worker can surface it (ProcessExitedBeforeReadyError)
+trap 'echo "start-moltbot.sh failed at line $LINENO with exit code $?" >&2' ERR
+
+# Check if openclaw gateway is already running - bail early if so
+if pgrep -f "openclaw gateway" > /dev/null 2>&1; then
+    echo "OpenClaw gateway is already running, exiting."
     exit 0
 fi
 
-# Paths (clawdbot paths are used internally - upstream hasn't renamed yet)
+# Paths: /root/.clawdbot and /data/moltbot kept for backward compat (reuse R2 backup & tokens)
 CONFIG_DIR="/root/.clawdbot"
-CONFIG_FILE="$CONFIG_DIR/clawdbot.json"
+CONFIG_FILE="$CONFIG_DIR/openclaw.json"
 TEMPLATE_DIR="/root/.clawdbot-templates"
 TEMPLATE_FILE="$TEMPLATE_DIR/moltbot.json.template"
 BACKUP_DIR="/data/moltbot"
@@ -31,9 +33,8 @@ mkdir -p "$CONFIG_DIR"
 # ============================================================
 # RESTORE FROM R2 BACKUP
 # ============================================================
-# Check if R2 backup exists by looking for clawdbot.json
-# The BACKUP_DIR may exist but be empty if R2 was just mounted
-# Note: backup structure is $BACKUP_DIR/clawdbot/ and $BACKUP_DIR/skills/
+# Check if R2 backup exists (openclaw.json or legacy clawdbot.json)
+# Backup structure: $BACKUP_DIR/clawdbot/, $BACKUP_DIR/skills/, $BACKUP_DIR/workspace/
 
 # Helper function to check if R2 backup is newer than local
 should_restore_from_r2() {
@@ -72,26 +73,52 @@ should_restore_from_r2() {
     fi
 }
 
-if [ -f "$BACKUP_DIR/clawdbot/clawdbot.json" ]; then
+if [ -f "$BACKUP_DIR/clawdbot/openclaw.json" ] || [ -f "$BACKUP_DIR/clawdbot/clawdbot.json" ]; then
     if should_restore_from_r2; then
         echo "Restoring from R2 backup at $BACKUP_DIR/clawdbot..."
-        cp -a "$BACKUP_DIR/clawdbot/." "$CONFIG_DIR/"
-        # Copy the sync timestamp to local so we know what version we have
-        cp -f "$BACKUP_DIR/.last-sync" "$CONFIG_DIR/.last-sync" 2>/dev/null || true
-        echo "Restored config from R2 backup"
+        if cp -a "$BACKUP_DIR/clawdbot/." "$CONFIG_DIR/"; then
+            cp -f "$BACKUP_DIR/.last-sync" "$CONFIG_DIR/.last-sync" 2>/dev/null || true
+            # Legacy: if only clawdbot.json was restored, openclaw reads openclaw.json
+            if [ -f "$CONFIG_DIR/clawdbot.json" ] && [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
+                cp "$CONFIG_DIR/clawdbot.json" "$CONFIG_DIR/openclaw.json"
+            fi
+            echo "Restored config from R2 backup"
+        else
+            echo "Restore from R2 failed (e.g. s3fs I/O), continuing with existing config" >&2
+        fi
     fi
 elif [ -f "$BACKUP_DIR/clawdbot.json" ]; then
     # Legacy backup format (flat structure)
     if should_restore_from_r2; then
         echo "Restoring from legacy R2 backup at $BACKUP_DIR..."
-        cp -a "$BACKUP_DIR/." "$CONFIG_DIR/"
-        cp -f "$BACKUP_DIR/.last-sync" "$CONFIG_DIR/.last-sync" 2>/dev/null || true
-        echo "Restored config from legacy R2 backup"
+        if cp -a "$BACKUP_DIR/." "$CONFIG_DIR/"; then
+            cp -f "$BACKUP_DIR/.last-sync" "$CONFIG_DIR/.last-sync" 2>/dev/null || true
+            if [ -f "$CONFIG_DIR/clawdbot.json" ] && [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
+                cp "$CONFIG_DIR/clawdbot.json" "$CONFIG_DIR/openclaw.json"
+            fi
+            echo "Restored config from legacy R2 backup"
+        else
+            echo "Restore from R2 failed (e.g. s3fs I/O), continuing with existing config" >&2
+        fi
     fi
 elif [ -d "$BACKUP_DIR" ]; then
     echo "R2 mounted at $BACKUP_DIR but no backup data found yet"
 else
     echo "R2 not mounted, starting fresh"
+fi
+
+# Restore workspace from R2 backup if available (IDENTITY.md, USER.md, MEMORY.md, memory/, assets/)
+WORKSPACE_DIR="/root/clawd"
+if [ -d "$BACKUP_DIR/workspace" ] && [ "$(ls -A $BACKUP_DIR/workspace 2>/dev/null)" ]; then
+    if should_restore_from_r2; then
+        echo "Restoring workspace from $BACKUP_DIR/workspace..."
+        mkdir -p "$WORKSPACE_DIR"
+        if cp -a "$BACKUP_DIR/workspace/." "$WORKSPACE_DIR/" 2>/dev/null; then
+            echo "Restored workspace from R2 backup"
+        else
+            echo "Workspace restore failed, continuing" >&2
+        fi
+    fi
 fi
 
 # Restore skills from R2 backup if available (only if R2 is newer)
@@ -100,16 +127,21 @@ if [ -d "$BACKUP_DIR/skills" ] && [ "$(ls -A $BACKUP_DIR/skills 2>/dev/null)" ];
     if should_restore_from_r2; then
         echo "Restoring skills from $BACKUP_DIR/skills..."
         mkdir -p "$SKILLS_DIR"
-        cp -a "$BACKUP_DIR/skills/." "$SKILLS_DIR/"
-        echo "Restored skills from R2 backup"
+        if cp -a "$BACKUP_DIR/skills/." "$SKILLS_DIR/" 2>/dev/null; then
+            echo "Restored skills from R2 backup"
+        else
+            echo "Skills restore failed, continuing" >&2
+        fi
     fi
 fi
 
-# If config file still doesn't exist, create from template
+# If config file still doesn't exist, create from template (openclaw.json)
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "No existing config found, initializing from template..."
     if [ -f "$TEMPLATE_FILE" ]; then
         cp "$TEMPLATE_FILE" "$CONFIG_FILE"
+    elif [ -f "$CONFIG_DIR/clawdbot.json" ]; then
+        cp "$CONFIG_DIR/clawdbot.json" "$CONFIG_FILE"
     else
         # Create minimal config if template doesn't exist
         cat > "$CONFIG_FILE" << 'EOFCONFIG'
@@ -136,14 +168,15 @@ fi
 node << EOFNODE
 const fs = require('fs');
 
-const configPath = '/root/.clawdbot/clawdbot.json';
+const configPath = '/root/.clawdbot/openclaw.json';
 console.log('Updating config at:', configPath);
 let config = {};
 
 try {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } catch (e) {
-    console.log('Starting with empty config');
+    console.log('Invalid or missing config, starting with empty config:', e.message);
+    config = {};
 }
 
 // Ensure nested objects exist
@@ -163,21 +196,29 @@ if (config.models?.providers?.anthropic?.models) {
     }
 }
 
-
+// Remove unrecognized channel keys (schema may change; restored R2 config may still have them)
+if (config.channels?.telegram?.dm !== undefined) {
+    console.log('Removing deprecated channels.telegram.dm');
+    delete config.channels.telegram.dm;
+}
+if (config.channels?.discord?.dm !== undefined) {
+    console.log('Removing deprecated channels.discord.dm');
+    delete config.channels.discord.dm;
+}
 
 // Gateway configuration
 config.gateway.port = 18789;
 config.gateway.mode = 'local';
 config.gateway.trustedProxies = ['10.1.0.0'];
 
-// Set gateway token if provided
-if (process.env.CLAWDBOT_GATEWAY_TOKEN) {
+// Set gateway token if provided (OPENCLAW_* from worker MOLTBOT_* for reuse)
+if (process.env.OPENCLAW_GATEWAY_TOKEN) {
     config.gateway.auth = config.gateway.auth || {};
-    config.gateway.auth.token = process.env.CLAWDBOT_GATEWAY_TOKEN;
+    config.gateway.auth.token = process.env.OPENCLAW_GATEWAY_TOKEN;
 }
 
 // Allow insecure auth for dev mode
-if (process.env.CLAWDBOT_DEV_MODE === 'true') {
+if (process.env.OPENCLAW_DEV_MODE === 'true') {
     config.gateway.controlUi = config.gateway.controlUi || {};
     config.gateway.controlUi.allowInsecureAuth = true;
 }
@@ -187,7 +228,6 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     config.channels.telegram = config.channels.telegram || {};
     config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
     config.channels.telegram.enabled = true;
-    config.channels.telegram.dm = config.channels.telegram.dm || {};
     config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
 }
 
@@ -196,8 +236,7 @@ if (process.env.DISCORD_BOT_TOKEN) {
     config.channels.discord = config.channels.discord || {};
     config.channels.discord.token = process.env.DISCORD_BOT_TOKEN;
     config.channels.discord.enabled = true;
-    config.channels.discord.dm = config.channels.discord.dm || {};
-    config.channels.discord.dm.policy = process.env.DISCORD_DM_POLICY || 'pairing';
+    config.channels.discord.dmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
 }
 
 // Slack configuration
@@ -213,38 +252,39 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
 //   https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic
 //   https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/openai
 // Or set MOONSHOT_API_KEY (and optionally MOONSHOT_BASE_URL) for Kimi K2.5
+// Base URL: https://api.moonshot.ai/v1 (international) or https://api.moonshot.cn/v1 (China)
 const baseUrl = (process.env.AI_GATEWAY_BASE_URL || process.env.ANTHROPIC_BASE_URL || '').replace(/\/+$/, '');
 const isOpenAI = baseUrl.endsWith('/openai');
 const kimiBaseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/+$/, '');
 const hasKimi = !!process.env.MOONSHOT_API_KEY;
 
 if (hasKimi) {
-    // Kimi (Moonshot) - OpenAI-compatible API; see https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart
-    console.log('Configuring Kimi (Moonshot) provider with base URL:', kimiBaseUrl);
+    // Kimi (Moonshot) - OpenAI-compatible API; see https://docs.openclaw.ai/providers/moonshot
+    console.log('Configuring Moonshot provider with base URL:', kimiBaseUrl);
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
-    config.models.providers.openai = {
+    config.models.providers.moonshot = {
         baseUrl: kimiBaseUrl,
-        api: 'openai-responses',
+        api: 'openai-completions',
         apiKey: process.env.MOONSHOT_API_KEY,
         models: [
-            { id: 'kimi-k2.5', name: 'Kimi K2.5', contextWindow: 262144 },
-            { id: 'kimi-k2-0905-Preview', name: 'Kimi K2 0905 Preview', contextWindow: 262144 },
-            { id: 'kimi-k2-turbo-preview', name: 'Kimi K2 Turbo', contextWindow: 262144 },
-            { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', contextWindow: 262144 },
-            { id: 'kimi-k2-thinking-turbo', name: 'Kimi K2 Thinking Turbo', contextWindow: 262144 },
+            { id: 'kimi-k2.5', name: 'Kimi K2.5', contextWindow: 256000, maxTokens: 8192 },
+            { id: 'kimi-k2-0905-preview', name: 'Kimi K2 0905 Preview', contextWindow: 256000, maxTokens: 8192 },
+            { id: 'kimi-k2-turbo-preview', name: 'Kimi K2 Turbo', contextWindow: 256000, maxTokens: 8192 },
+            { id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', contextWindow: 256000, maxTokens: 8192 },
+            { id: 'kimi-k2-thinking-turbo', name: 'Kimi K2 Thinking Turbo', contextWindow: 256000, maxTokens: 8192 },
         ]
     };
     config.agents.defaults.models = config.agents.defaults.models || {};
-    config.agents.defaults.models['openai/kimi-k2.5'] = { alias: 'Kimi K2.5' };
-    config.agents.defaults.models['openai/kimi-k2-0905-Preview'] = { alias: 'Kimi K2 0905' };
-    config.agents.defaults.models['openai/kimi-k2-turbo-preview'] = { alias: 'Kimi K2 Turbo' };
-    config.agents.defaults.models['openai/kimi-k2-thinking'] = { alias: 'Kimi K2 Thinking' };
-    config.agents.defaults.models['openai/kimi-k2-thinking-turbo'] = { alias: 'Kimi K2 Thinking Turbo' };
-    config.agents.defaults.model.primary = 'openai/kimi-k2.5';
+    config.agents.defaults.models['moonshot/kimi-k2.5'] = { alias: 'Kimi K2.5' };
+    config.agents.defaults.models['moonshot/kimi-k2-0905-preview'] = { alias: 'Kimi K2 0905' };
+    config.agents.defaults.models['moonshot/kimi-k2-turbo-preview'] = { alias: 'Kimi K2 Turbo' };
+    config.agents.defaults.models['moonshot/kimi-k2-thinking'] = { alias: 'Kimi K2 Thinking' };
+    config.agents.defaults.models['moonshot/kimi-k2-thinking-turbo'] = { alias: 'Kimi K2 Thinking Turbo' };
+    config.agents.defaults.model.primary = 'moonshot/kimi-k2.5';
 } else if (isOpenAI) {
     // Create custom openai provider config with baseUrl override
-    // Omit apiKey so moltbot falls back to OPENAI_API_KEY env var
+    // Omit apiKey so openclaw falls back to OPENAI_API_KEY env var
     console.log('Configuring OpenAI provider with base URL:', baseUrl);
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
@@ -302,20 +342,20 @@ EOFNODE
 # START GATEWAY
 # ============================================================
 # Note: R2 backup sync is handled by the Worker's cron trigger
-echo "Starting Moltbot Gateway..."
+echo "Starting OpenClaw Gateway..."
 echo "Gateway will be available on port 18789"
 
 # Clean up stale lock files
-rm -f /tmp/clawdbot-gateway.lock 2>/dev/null || true
+rm -f /tmp/openclaw-gateway.lock 2>/dev/null || true
 rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 
 BIND_MODE="lan"
-echo "Dev mode: ${CLAWDBOT_DEV_MODE:-false}, Bind mode: $BIND_MODE"
+echo "Dev mode: ${OPENCLAW_DEV_MODE:-false}, Bind mode: $BIND_MODE"
 
-if [ -n "$CLAWDBOT_GATEWAY_TOKEN" ]; then
+if [ -n "$OPENCLAW_GATEWAY_TOKEN" ]; then
     echo "Starting gateway with token auth..."
-    exec clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE" --token "$CLAWDBOT_GATEWAY_TOKEN"
+    exec openclaw gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE" --token "$OPENCLAW_GATEWAY_TOKEN"
 else
     echo "Starting gateway with device pairing (no token)..."
-    exec clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE"
+    exec openclaw gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE"
 fi

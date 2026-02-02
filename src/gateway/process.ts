@@ -14,14 +14,13 @@ export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Proc
   try {
     const processes = await sandbox.listProcesses();
     for (const proc of processes) {
-      // Only match the gateway process, not CLI commands like "clawdbot devices list"
-      // Note: CLI is still named "clawdbot" until upstream renames it
+      // Only match the gateway process, not CLI commands like "openclaw devices list"
       const isGatewayProcess = 
         proc.command.includes('start-moltbot.sh') ||
-        proc.command.includes('clawdbot gateway');
+        proc.command.includes('openclaw gateway');
       const isCliCommand = 
-        proc.command.includes('clawdbot devices') ||
-        proc.command.includes('clawdbot --version');
+        proc.command.includes('openclaw devices') ||
+        proc.command.includes('openclaw --version');
       
       if (isGatewayProcess && !isCliCommand) {
         if (proc.status === 'starting' || proc.status === 'running') {
@@ -110,7 +109,12 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
       const logs = await process.getLogs();
       console.error('[Gateway] startup failed. Stderr:', logs.stderr);
       console.error('[Gateway] startup failed. Stdout:', logs.stdout);
-      throw new Error(`Moltbot gateway failed to start. Stderr: ${logs.stderr || '(empty)'}`);
+      const reason = e instanceof Error ? e.message : String(e);
+      const stderr = logs.stderr || '(empty)';
+      const stdout = logs.stdout || '(empty)';
+      throw new Error(
+        `Moltbot gateway failed to start: ${reason}. Stderr: ${stderr}. Stdout: ${stdout}`.slice(0, 2000)
+      );
     } catch (logErr) {
       console.error('[Gateway] Failed to get logs:', logErr);
       throw e;
