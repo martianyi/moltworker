@@ -30,6 +30,8 @@ export interface MoltbotEnv {
   OPENCLAW_TELEGRAM_ALLOWED_USERS?: string;
   DISCORD_BOT_TOKEN?: string;
   DISCORD_DM_POLICY?: string;
+  /** Comma-separated Discord user IDs for DM allowlist (used when DISCORD_DM_POLICY=allowlist) */
+  DISCORD_DM_ALLOW_FROM?: string;
   SLACK_BOT_TOKEN?: string;
   SLACK_APP_TOKEN?: string;
   // Cloudflare Access configuration for admin routes

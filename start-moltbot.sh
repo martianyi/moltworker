@@ -260,8 +260,17 @@ if (process.env.DISCORD_BOT_TOKEN) {
     const discordDmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
     config.channels.discord.dm = config.channels.discord.dm || {};
     config.channels.discord.dm.policy = discordDmPolicy;
-    // "open" policy requires allowFrom: ["*"]
-    if (discordDmPolicy === 'open') {
+    if (discordDmPolicy === 'allowlist') {
+        const allowFrom = (process.env.DISCORD_DM_ALLOW_FROM || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (allowFrom.length === 0) {
+            throw new Error('DISCORD_DM_POLICY=allowlist requires DISCORD_DM_ALLOW_FROM (comma-separated Discord user IDs)');
+        }
+        config.channels.discord.dm.allowFrom = allowFrom;
+    } else if (discordDmPolicy === 'open') {
+        // "open" policy requires allowFrom: ["*"]
         config.channels.discord.dm.allowFrom = ['*'];
     }
 }
