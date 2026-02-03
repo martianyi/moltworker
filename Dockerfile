@@ -22,7 +22,7 @@ RUN npm install -g pnpm
 
 # Install OpenClaw (moltbot/clawdbot renamed to openclaw)
 # Pin to specific version for reproducible builds
-RUN npm install -g openclaw@2026.1.29 \
+RUN npm install -g openclaw@2026.2.1 \
     && openclaw --version
 
 # Config dir /root/.clawdbot and R2 path /data/moltbot kept for backward compat (reuse existing tokens/paths)
@@ -32,7 +32,7 @@ RUN mkdir -p /root/.clawdbot \
     && mkdir -p /root/clawd/skills
 
 # Copy startup script
-# Build cache bust: 2026-02-02-openclaw-2026.1.30
+# Build cache bust: 2026-02-02-openclaw-2026.2.1
 COPY start-moltbot.sh /usr/local/bin/start-moltbot.sh
 RUN chmod +x /usr/local/bin/start-moltbot.sh
 
