@@ -371,6 +371,7 @@ The `AI_GATEWAY_*` variables take precedence over `ANTHROPIC_*` if both are set.
 | `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
 | `MOONSHOT_API_KEY` | No | Kimi (Moonshot) API key — [Moonshot/Kimi K2](https://docs.openclaw.ai/providers/moonshot) (OpenAI-compatible) |
 | `MOONSHOT_BASE_URL` | No | Moonshot API base URL: `https://api.moonshot.cn/v1` (China, default) or `https://api.moonshot.ai/v1` (international) |
+| `GITHUB_TOKEN` | No | GitHub token passed through to the OpenClaw container |
 | `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
 | `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
 | `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |
@@ -409,6 +410,8 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 **Gateway fails to start:** Check `npx wrangler secret list` and `npx wrangler tail`
 
 **Config changes not working:** Edit the `# Build cache bust:` comment in `Dockerfile` and redeploy
+
+**Secret/env changes not taking effect:** The OpenClaw gateway runs as a long-lived process in the sandbox; changes only apply after a gateway restart. Use the admin API `POST /api/admin/gateway/restart` (requires Cloudflare Access auth).
 
 **Slow first request:** Cold starts take 1-2 minutes. Subsequent requests are faster.
 

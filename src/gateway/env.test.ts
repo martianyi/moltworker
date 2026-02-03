@@ -15,6 +15,12 @@ describe('buildEnvVars', () => {
     expect(result.ANTHROPIC_API_KEY).toBe('sk-test-key');
   });
 
+  it('includes GITHUB_TOKEN when set', () => {
+    const env = createMockEnv({ GITHUB_TOKEN: 'ghp_test_token' });
+    const result = buildEnvVars(env);
+    expect(result.GITHUB_TOKEN).toBe('ghp_test_token');
+  });
+
   it('maps AI_GATEWAY_API_KEY to ANTHROPIC_API_KEY for Anthropic gateway', () => {
     const env = createMockEnv({
       AI_GATEWAY_API_KEY: 'sk-gateway-key',
