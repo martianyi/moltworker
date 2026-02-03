@@ -201,9 +201,9 @@ if (config.channels?.telegram?.dm !== undefined) {
     console.log('Removing deprecated channels.telegram.dm');
     delete config.channels.telegram.dm;
 }
-if (config.channels?.discord?.dm !== undefined) {
-    console.log('Removing deprecated channels.discord.dm');
-    delete config.channels.discord.dm;
+if (config.channels?.discord?.dmPolicy !== undefined) {
+    console.log('Removing deprecated channels.discord.dmPolicy');
+    delete config.channels.discord.dmPolicy;
 }
 
 // Gateway configuration
@@ -235,16 +235,35 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
             .map((s) => s.trim())
             .filter(Boolean);
     } else {
-        config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+        const telegramDmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+        config.channels.telegram.dmPolicy = telegramDmPolicy;
+        if (process.env.TELEGRAM_DM_ALLOW_FROM) {
+            // Explicit allowlist: "123,456,789" → ['123', '456', '789']
+            config.channels.telegram.allowFrom = process.env.TELEGRAM_DM_ALLOW_FROM
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+        } else if (telegramDmPolicy === 'open') {
+            // "open" policy requires allowFrom: ["*"]
+            config.channels.telegram.allowFrom = ['*'];
+        }
     }
 }
 
 // Discord configuration
+// Note: Discord uses nested dm.policy, not flat dmPolicy like Telegram
+// See: https://github.com/moltbot/moltbot/blob/v2026.1.24-1/src/config/zod-schema.providers-core.ts#L147-L155
 if (process.env.DISCORD_BOT_TOKEN) {
     config.channels.discord = config.channels.discord || {};
     config.channels.discord.token = process.env.DISCORD_BOT_TOKEN;
     config.channels.discord.enabled = true;
-    config.channels.discord.dmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
+    const discordDmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
+    config.channels.discord.dm = config.channels.discord.dm || {};
+    config.channels.discord.dm.policy = discordDmPolicy;
+    // "open" policy requires allowFrom: ["*"]
+    if (discordDmPolicy === 'open') {
+        config.channels.discord.dm.allowFrom = ['*'];
+    }
 }
 
 // Slack configuration

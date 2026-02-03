@@ -37,3 +37,12 @@ Thumbs.db
 # Docker build artifacts
 *.tar
 .specstory
+
+# Veta agent memory
+.veta/
+
+# greger.el conversation
+*.greger
+
+# playwright-cli
+.playwright-cli/
