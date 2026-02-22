@@ -10,7 +10,7 @@ This is a Cloudflare Worker that runs [OpenClaw](https://github.com/openclaw/ope
 - API endpoints at `/api/*` for device pairing
 - Debug endpoints at `/debug/*` for troubleshooting
 
-**Note:** Worker env keeps `MOLTBOT_*` and `MOLTBOT_BUCKET` for reuse. Container uses OpenClaw CLI (`openclaw`), config file `openclaw.json`, and `OPENCLAW_STATE_DIR=/root/.clawdbot` so existing R2 paths and tokens work unchanged.
+**Note:** The CLI tool and npm package are now named `openclaw`. Config files use `.openclaw/openclaw.json`. Legacy `.clawdbot` paths are supported for backward compatibility during transition.
 
 ## Project Structure
 
@@ -23,7 +23,7 @@ src/
 │   ├── jwt.ts        # JWT verification
 │   ├── jwks.ts       # JWKS fetching and caching
 │   └── middleware.ts # Hono middleware for auth
-├── gateway/          # Moltbot gateway management
+├── gateway/          # OpenClaw gateway management
 │   ├── process.ts    # Process lifecycle (find, start)
 │   ├── env.ts        # Environment variable building
 │   ├── r2.ts         # R2 bucket mounting
@@ -86,6 +86,7 @@ Current test coverage:
 - `gateway/env.test.ts` - Environment variable building
 - `gateway/process.test.ts` - Process finding logic
 - `gateway/r2.test.ts` - R2 mounting logic
+- `gateway/sync.test.ts` - R2 backup sync logic
 
 When adding new functionality, add corresponding tests.
 
@@ -113,7 +114,7 @@ Browser
    ▼
 ┌─────────────────────────────────────┐
 │     Cloudflare Worker (index.ts)    │
-│  - Starts Moltbot in sandbox        │
+│  - Starts OpenClaw in sandbox       │
 │  - Proxies HTTP/WebSocket requests  │
 │  - Passes secrets as env vars       │
 └──────────────┬──────────────────────┘
@@ -122,7 +123,7 @@ Browser
 ┌─────────────────────────────────────┐
 │     Cloudflare Sandbox Container    │
 │  ┌───────────────────────────────┐  │
-│  │     Moltbot Gateway           │  │
+│  │     OpenClaw Gateway          │  │
 │  │  - Control UI on port 18789   │  │
 │  │  - WebSocket RPC protocol     │  │
 │  │  - Agent runtime              │  │
@@ -135,9 +136,8 @@ Browser
 | File | Purpose |
 |------|---------|
 | `src/index.ts` | Worker that manages sandbox lifecycle and proxies requests |
-| `Dockerfile` | Container image based on `cloudflare/sandbox` with Node 22 + Moltbot |
-| `start-moltbot.sh` | Startup script that configures moltbot from env vars and launches gateway |
-| `moltbot.json.template` | Default Moltbot configuration template |
+| `Dockerfile` | Container image based on `cloudflare/sandbox` with Node 22 + OpenClaw |
+| `start-openclaw.sh` | Startup script: R2 restore → onboard → config patch → launch gateway |
 | `wrangler.jsonc` | Cloudflare Worker + Container configuration |
 
 ## Local Development
@@ -145,7 +145,7 @@ Browser
 ```bash
 npm install
 cp .dev.vars.example .dev.vars
-# Edit .dev.vars with your ANTHROPIC_API_KEY (or MOONSHOT_API_KEY) and options below
+# Edit .dev.vars with your ANTHROPIC_API_KEY
 npm run start
 ```
 
@@ -157,71 +157,52 @@ For local development, create `.dev.vars`:
 ANTHROPIC_API_KEY=sk-ant-...
 DEV_MODE=true           # Skips CF Access auth + device pairing
 DEBUG_ROUTES=true       # Enables /debug/* routes
-MOLTBOT_GATEWAY_TOKEN=dev-token-change-in-prod
 ```
 
-### Local Debugging
+### WebSocket Limitations
 
-1. **Start the Worker locally** (with Sandbox container):
-   ```bash
-   npm run start
-   ```
-   Or use Vite + Worker together (Cloudflare plugin):
-   ```bash
-   npm run dev
-   ```
-
-2. **Enable debug routes** in `.dev.vars`: set `DEBUG_ROUTES=true`, then:
-   - `http://localhost:8787/debug/env` — which env vars are set (no values)
-   - `http://localhost:8787/debug/processes` — running processes in the sandbox
-   - `http://localhost:8787/debug/version` — openclaw version
-   - `http://localhost:8787/debug/container-config` — openclaw config inside container
-
-3. **Skip auth locally**: set `DEV_MODE=true` so Cloudflare Access and device pairing are bypassed; you can hit `/_admin` and the gateway proxy without logging in.
-
-4. **Logs**: `console.log` in Worker code appears in the terminal where `npm run start` or `npm run dev` is running.
-
-5. **Unit tests** (no container): `npm test` or `npm run test:watch`; tests are in `*.test.ts` next to source.
-
-6. **Typecheck**: `npm run typecheck`.
-
-### WebSocket Limitations / 本地发消息没回
-
-Local development with `wrangler dev` has issues proxying WebSocket connections through the sandbox. **Chat in the Control UI uses WebSocket** — so messages may not send or get no reply locally. HTTP requests (e.g. `/debug/*`, static assets) work; WebSocket (real-time chat) often fails.
-
-- **To get chat working:** Deploy to Cloudflare (`npm run deploy`) and use the deployed Worker URL; WebSocket works there.
-- **To confirm locally:** In the terminal where `npm run start` runs, check for `[WS] Proxying WebSocket` and `[WS] Client -> Container` logs when you send a message. If you see no `[WS]` logs or errors, the WebSocket upgrade/proxy is failing locally.
+Local development with `wrangler dev` has issues proxying WebSocket connections through the sandbox. HTTP requests work but WebSocket connections may fail. Deploy to Cloudflare for full functionality.
 
 ## Docker Image Caching
 
-The Dockerfile includes a cache bust comment. When changing `moltbot.json.template` or `start-moltbot.sh`, bump the version:
+The Dockerfile includes a cache bust comment. When changing `start-openclaw.sh`, bump the version:
 
 ```dockerfile
-# Build cache bust: 2026-01-26-v10
+# Build cache bust: 2026-02-06-v28-openclaw-upgrade
 ```
 
 ## Gateway Configuration
 
 OpenClaw configuration is built at container startup:
 
-1. `moltbot.json.template` is copied to `~/.clawdbot/openclaw.json` (OPENCLAW_STATE_DIR=/root/.clawdbot for path reuse)
-2. `start-moltbot.sh` updates the config from environment variables
-3. Gateway starts with `--allow-unconfigured` flag (skips onboarding wizard)
+1. R2 backup is restored if available (with migration from legacy `.clawdbot` paths)
+2. If no config exists, `openclaw onboard --non-interactive` creates one based on env vars
+3. `start-openclaw.sh` patches the config for channels, gateway auth, and trusted proxies
+4. Gateway starts with `openclaw gateway --allow-unconfigured --bind lan`
+
+### AI Provider Priority
+
+The startup script selects the auth choice based on which env vars are set:
+
+1. **Cloudflare AI Gateway** (native): `CLOUDFLARE_AI_GATEWAY_API_KEY` + `CF_AI_GATEWAY_ACCOUNT_ID` + `CF_AI_GATEWAY_GATEWAY_ID`
+2. **Direct Anthropic**: `ANTHROPIC_API_KEY` (optionally with `ANTHROPIC_BASE_URL`)
+3. **Direct OpenAI**: `OPENAI_API_KEY`
+4. **Legacy AI Gateway**: `AI_GATEWAY_API_KEY` + `AI_GATEWAY_BASE_URL` (routes through Anthropic base URL)
 
 ### Container Environment Variables
 
-These are the env vars passed TO the container (worker keeps MOLTBOT_* for reuse):
+These are the env vars passed TO the container (internal names):
 
 | Variable | Config Path | Notes |
 |----------|-------------|-------|
 | `ANTHROPIC_API_KEY` | (env var) | OpenClaw reads directly from env |
-| `MOONSHOT_API_KEY` | (env var) | Kimi (Moonshot) — OpenAI-compatible; start-moltbot.sh configures moonshot provider ([docs](https://docs.openclaw.ai/providers/moonshot)) |
-| `MOONSHOT_BASE_URL` | moonshot provider baseUrl | Default `https://api.moonshot.cn/v1` (China); use `https://api.moonshot.ai/v1` for international |
+| `OPENAI_API_KEY` | (env var) | OpenClaw reads directly from env |
+| `CLOUDFLARE_AI_GATEWAY_API_KEY` | (env var) | Native AI Gateway key |
+| `CF_AI_GATEWAY_ACCOUNT_ID` | (env var) | Account ID for AI Gateway |
+| `CF_AI_GATEWAY_GATEWAY_ID` | (env var) | Gateway ID for AI Gateway |
 | `OPENCLAW_GATEWAY_TOKEN` | `--token` flag | Mapped from `MOLTBOT_GATEWAY_TOKEN` |
 | `OPENCLAW_DEV_MODE` | `controlUi.allowInsecureAuth` | Mapped from `DEV_MODE` |
-| `OPENCLAW_STATE_DIR` | config dir | Set to `/root/.clawdbot` so existing R2 backup path is reused |
 | `TELEGRAM_BOT_TOKEN` | `channels.telegram.botToken` | |
-| `OPENCLAW_TELEGRAM_ALLOWED_USERS` | `channels.telegram.dmPolicy=allowlist` + `allowFrom` | Comma-separated user IDs; when set, replaces pairing |
 | `DISCORD_BOT_TOKEN` | `channels.discord.token` | |
 | `SLACK_BOT_TOKEN` | `channels.slack.botToken` | |
 | `SLACK_APP_TOKEN` | `channels.slack.appToken` | |
@@ -235,7 +216,7 @@ OpenClaw has strict config validation. Common gotchas:
 - No `webchat` channel - the Control UI is served automatically
 - `gateway.bind` is not a config option - use `--bind` CLI flag
 
-See [OpenClaw docs](https://docs.openclaw.ai/gateway/configuration) for full schema.
+See [OpenClaw docs](https://docs.openclaw.ai/) for full schema.
 
 ## Common Tasks
 
@@ -267,9 +248,7 @@ Enable debug routes with `DEBUG_ROUTES=true` and check `/debug/processes`.
 
 ## R2 Storage Notes
 
-R2 is mounted via s3fs at `/data/moltbot`. Backup structure: `clawdbot/` (gateway config), `skills/` (agent skills), `workspace/` (IDENTITY.md, USER.md, MEMORY.md, memory/, assets/ — agent workspace, persisted so memory is not lost across restarts).
-
-Important gotchas:
+R2 is mounted via s3fs at `/data/moltbot`. Important gotchas:
 
 - **rsync compatibility**: Use `rsync -r --no-times` instead of `rsync -a`. s3fs doesn't support setting timestamps, which causes rsync to fail with "Input/output error".
 
@@ -278,3 +257,5 @@ Important gotchas:
 - **Never delete R2 data**: The mount directory `/data/moltbot` IS the R2 bucket. Running `rm -rf /data/moltbot/*` will DELETE your backup data. Always check mount status before any destructive operations.
 
 - **Process status**: The sandbox API's `proc.status` may not update immediately after a process completes. Instead of checking `proc.status === 'completed'`, verify success by checking for expected output (e.g., timestamp file exists after sync).
+
+- **R2 prefix migration**: Backups are now stored under `openclaw/` prefix in R2 (was `clawdbot/`). The startup script handles restoring from both old and new prefixes with automatic migration.
